@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QFileDialog
 from qgis.utils import iface
 from qgis.PyQt.QtCore import QVariant
 
-from qgis.core import(
+from qgis.core import (
     QgsField,
     QgsVectorDataProvider,
     QgsExpression,
@@ -19,44 +19,69 @@ from qgis.core import(
 
 from qgis import processing
 
+# ----- Utility Functions -----
+def throw_exception(except_message):
+    iface.messageBar().pushMessage("Oops", except_message, level=Qgis.Critical)
+    raise Exception (except_message)
+
 # ---- input data -----
 # This should be a geopackage with two features/tables
 # 1. A centerline named 'centerline'
 # 2. a segmented polygon named 'valley-bottom-segmented'
 
 # This will obviously change in the future but fine for development purposes
-
-
 # Point to a geopackage
 input_path = QFileDialog.getOpenFileName()[0]
 
 # check if it is a valid file path
 if not os.path.isfile(input_path):
-    the_message = 'Rerun the script and choose a valid file path'
-    iface.messageBar().pushMessage("Oops", the_message, level=Qgis.Critical)
-    # TODO break this if it isn't a valid path        
+    throw_exception('Not a valid file path')
 
-# TODO check if it is a geopackage
-    
+# check if geopackage
+if not input_path[-5:len(input_path)] == '.gpkg':
+    throw_exception('Selection must be geopackage')
+
+# TODO Refactor to show dialogue with names of the items in the geopackage
+
 # Open the geopackage
 input_layers = ogr.Open(str(input_path))
 
-# TODO create file dialogs asking for the name of each type
-
 # Print a list of the tables in the geopackage
-for l in input_layers:
-    print(l.GetName())
+for layer in input_layers:
+    print(layer.GetName())
 
-# TODO #1 check validity and for empty feature classes.
 # Open the valley bottom segments
 raw_segments = iface.addVectorLayer(input_path + "|layername=valley-bottom-segmented", "valley-bottom-segmented", 'ogr')
 
 # Open the centerline
 raw_centerline = iface.addVectorLayer(input_path + "|layername=centerline", "centerline", 'ogr')
 
-# TODO #2 Check what happens if layers are in different projections?
+# TODO #1 check validity and for empty feature classes.
+if not raw_centerline.isValid() or not raw_centerline.featureCount() >= 1:
+    throw_exception('Not a valid centerline layer')
+
+if not raw_segments.isValid() or not raw_segments.featureCount() >= 1:
+    throw_exception('Not a valid segmented valley bottom layer')
+
+# TODO #2 What happens if layers are in different projections?
+# beginning input is currently .gpkg, so should be in the correct CRS
+if raw_segments.crs().description() != raw_centerline.crs().description():
+    throw_exception('Input layers are not in the same project')
 
 # TODO #3 What happens if centerline doesn't intersect polygons'
+# right now it simply stops and logs a message
+features_intersect = False
+
+
+for line in raw_centerline.getFeatures():
+    line_geom = line.geometry()
+    for segment in raw_segments.getFeatures():
+        segment_geom = segment.geometry()
+        if line_geom.intersects(segment_geom):
+            features_intersect = True
+
+if not features_intersect:
+    throw_exception('Features do not intersect')
 
 # TODO #4 What if the int_width_m field doesn't exist'
 
@@ -72,7 +97,6 @@ raw_centerline = iface.addVectorLayer(input_path + "|layername=centerline", "cen
 
 
 # ------- Input Segments and Get Areas --------
-
 
 # Create a data provider and string of capabilities
 pr_raw_segments = raw_segments.dataProvider()
