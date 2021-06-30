@@ -1,13 +1,13 @@
 {
-		// FROM: https://gist.github.com/NicolaiMogensen/acfd8723720c4761aefef3cdfc2aa55a
-		// I like changing colors for my projects. QGIS projects are usually green. 
-		"workbench.colorCustomizations": {
-			"titleBar.activeForeground": "#000000",
-			"titleBar.activeBackground": "#0ff381",
-		},
-		"terminal.integrated.env.osx": {
-			"PYTHONPATH": "${env:QGIS_PATH}/Contents/Resources/python:${env:QGIS_PATH}/Contents/Resources/python/site-packages:${env:QGIS_PATH}/Contents/Resources/python/site-packages/PyQt5",
-			"PATH": "${env:PATH}:${env:QGIS_PATH}/Contents/MacOS/bin"
-		},
-		"python.pythonPath": "${env:QGIS_PATH}/Contents/MacOS/bin/python3.8"
-	}
+	// FROM: https://gist.github.com/NicolaiMogensen/acfd8723720c4761aefef3cdfc2aa55a
+	// I like changing colors for my projects. QGIS projects are usually green. 
+	"workbench.colorCustomizations": {
+		"titleBar.activeForeground": "#000000",
+		"titleBar.activeBackground": "#0ff381",
+	},
+	"terminal.integrated.env.osx": {
+		"PYTHONPATH": "${env:QGIS_PATH}/Contents/Resources/python:${env:QGIS_PATH}/Contents/Resources/python/site-packages:${env:QGIS_PATH}/Contents/Resources/python/site-packages/PyQt5",
+		"PATH": "${env:PATH}:${env:QGIS_PATH}/Contents/MacOS/bin"
+	},
+	"python.pythonPath": "${env:QGIS_PATH}/Contents/MacOS/bin/python3.8"
+}

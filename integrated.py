@@ -1,5 +1,6 @@
 
 import os
+import sys
 from osgeo import ogr
 from PyQt5.QtWidgets import QFileDialog
 from qgis.utils import iface
@@ -13,6 +14,7 @@ from qgis.core import(
     QgsExpressionContextUtils,
     QgsVectorFileWriter,
     QgsProject,
+    Qgis,
     edit)
 
 from qgis import processing
@@ -24,9 +26,18 @@ from qgis import processing
 
 # This will obviously change in the future but fine for development purposes
 
+
 # Point to a geopackage
 input_path = QFileDialog.getOpenFileName()[0]
 
+# check if it is a valid file path
+if not os.path.isfile(input_path):
+    the_message = 'Rerun the script and choose a valid file path'
+    iface.messageBar().pushMessage("Oops", the_message, level=Qgis.Critical)
+    # TODO break this if it isn't a valid path        
+
+# TODO check if it is a geopackage
+    
 # Open the geopackage
 input_layers = ogr.Open(str(input_path))
 
@@ -36,17 +47,32 @@ input_layers = ogr.Open(str(input_path))
 for l in input_layers:
     print(l.GetName())
 
-# Open the segments and add to variable
+# TODO #1 check validity and for empty feature classes.
+# Open the valley bottom segments
 raw_segments = iface.addVectorLayer(input_path + "|layername=valley-bottom-segmented", "valley-bottom-segmented", 'ogr')
-# TODO rename
-# TODO a bit of symbology
 
-# Open the centerline and add to variable
+# Open the centerline
 raw_centerline = iface.addVectorLayer(input_path + "|layername=centerline", "centerline", 'ogr')
-# TODO rename
-# TODO a bit of symbology
+
+# TODO #2 Check what happens if layers are in different projections?
+
+# TODO #3 What happens if centerline doesn't intersect polygons'
+
+# TODO #4 What if the int_width_m field doesn't exist'
+
+# TODO #5 Can we calculate widths for multiple centerlines
+
+# TODO #6 What happens with multiple centerlines?
+
+# TODO #7 What happens at top and bottom of reach if the centerline starts or ends partially inside the top or bottom most segment of the channel?
+
+# TODO #8 What happens if the polygon has a donut in it?
+
+# TODO #9 What happens if the centerline (erroneously) passes outside part of the polygon and re-enters, producing two segments that intersect the polygon?
+
 
 # ------- Input Segments and Get Areas --------
+
 
 # Create a data provider and string of capabilities
 pr_raw_segments = raw_segments.dataProvider()
@@ -54,9 +80,12 @@ caps_raw_segments = pr_raw_segments.capabilitiesString()
 
 # -- Calculate Area of Segments --
 
-# add the area attribute
+# add the area attribute if it doesn't exist
 if "Add Attributes" in caps_raw_segments:
-    pr_raw_segments.addAttributes([QgsField('area_m', QVariant.Int)])
+    if 'area_m' not in raw_segments.fields().names():
+        pr_raw_segments.addAttributes([QgsField('area_m', QVariant.Int)])
+    if 'int_width_m' not in raw_segments.fields().names():
+        pr_raw_segments.addAttributes([QgsField('int_width_m', QVariant.Int)])
     raw_segments.updateFields()
 
 # Create a context and scope
@@ -77,12 +106,12 @@ with edit(raw_segments):
 
 # Intersection tool to segment the centerline
 gp_intersect = processing.run("native:intersection",
-    {'INPUT':raw_centerline,
-    'OVERLAY':raw_segments,
-    'INPUT_FIELDS':[],
-    'OVERLAY_FIELDS':[],
-    'OVERLAY_FIELDS_PREFIX':'seg_',
-    'OUTPUT':'TEMPORARY_OUTPUT'})
+                              {'INPUT': raw_centerline,
+                               'OVERLAY': raw_segments,
+                               'INPUT_FIELDS': [],
+                                'OVERLAY_FIELDS': [],
+                                'OVERLAY_FIELDS_PREFIX': 'seg_',
+                                'OUTPUT': 'TEMPORARY_OUTPUT'})
 
 # Grab the output vector layer
 temp_centerline_segmented = gp_intersect['OUTPUT']
@@ -98,10 +127,10 @@ caps_temp_centerline_segmented = pr_temp_centerline_segmented.capabilitiesString
 
 # add the line attribute
 if "Add Attributes" in caps_temp_centerline_segmented:
-    pr_temp_centerline_segmented.addAttributes([
-        QgsField('length_m', QVariant.Int),
-        QgsField('int_width_m', QVariant.Int)
-        ])
+    if 'length_m' not in temp_centerline_segmented.fields().names():
+        pr_temp_centerline_segmented.addAttributes([QgsField('length_m', QVariant.Int)])
+    if 'int_width_m' not in temp_centerline_segmented.fields().names():
+        pr_temp_centerline_segmented.addAttributes([QgsField('int_width_m', QVariant.Int)])
     temp_centerline_segmented.updateFields()
 
 # and the line length
@@ -138,9 +167,5 @@ QgsVectorFileWriter.writeAsVectorFormat(
     temp_centerline_segmented, output_vector_path, 'utf-8,', driverName='GPKG')
 
 
-# open the output layer
-
-
-
-
-
+# add to the interface
+iface.addVectorLayer(output_vector_path, '', 'ogr')
