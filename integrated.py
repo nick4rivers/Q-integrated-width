@@ -21,7 +21,7 @@ from qgis import processing
 
 # ----- Utility Functions -----
 def throw_exception(except_message):
-    iface.messageBar().pushMessage("Oops", except_message, level=Qgis.Critical)
+    iface.messageBar().pushMessage("Oops", except_message, duration=10, level=Qgis.Critical)
     raise Exception (except_message)
 
 # ---- input data -----
@@ -29,7 +29,7 @@ def throw_exception(except_message):
 # 1. A centerline named 'centerline'
 # 2. a segmented polygon named 'valley-bottom-segmented'
 
-# This will obviously change in the future but fine for development purposes
+# TODO This will obviously change in the future but fine for development purposes
 # Point to a geopackage
 input_path = QFileDialog.getOpenFileName()[0]
 
@@ -84,6 +84,7 @@ if not features_intersect:
     throw_exception('Features do not intersect')
 
 # TODO #4 What if the int_width_m field doesn't exist'
+# checks for presence
 
 # TODO #5 Can we calculate widths for multiple centerlines
 
@@ -108,8 +109,6 @@ caps_raw_segments = pr_raw_segments.capabilitiesString()
 if "Add Attributes" in caps_raw_segments:
     if 'area_m' not in raw_segments.fields().names():
         pr_raw_segments.addAttributes([QgsField('area_m', QVariant.Int)])
-    if 'int_width_m' not in raw_segments.fields().names():
-        pr_raw_segments.addAttributes([QgsField('int_width_m', QVariant.Int)])
     raw_segments.updateFields()
 
 # Create a context and scope
@@ -162,21 +161,27 @@ context = QgsExpressionContext()
 context.appendScopes(
     QgsExpressionContextUtils.globalProjectLayerScopes(temp_centerline_segmented))
 
-# Loop through and add the areas and calculate widths
+# Loop through and add length and update fid
 with edit(temp_centerline_segmented):
     # loop them
     for f in temp_centerline_segmented.getFeatures():
         context.setFeature(f)
         f['fid'] = QgsExpression('$id').evaluate(context)
         f['length_m'] = QgsExpression('$length').evaluate(context)
+        temp_centerline_segmented.updateFeature(f)
+
+# Loop to calculate the integrated width
+with edit(temp_centerline_segmented):
+    # loop them
+    for f in temp_centerline_segmented.getFeatures():
+        context.setFeature(f)
         f['int_width_m'] = QgsExpression('"seg_area_m" / "length_m"').evaluate(context)
         temp_centerline_segmented.updateFeature(f)
 
-
 # ----- OUTPUT FINAL DATA --------
-# Select a working directory
-message_text = 'Select a working directory when prompted'
-iface.messageBar().pushMessage(message_text, duration=10)
+# Select an output directory
+message_text = 'Select an output directory'
+iface.messageBar().pushMessage(message_text)
 work_path = QFileDialog.getExistingDirectory()
 
 # Create output directory
@@ -184,12 +189,17 @@ outputs_path = os.path.join(work_path, 'outputs')
 if not os.path.exists(outputs_path):
     os.mkdir(outputs_path)
 
-
 # -- Write out to a final geopackage
 output_vector_path = os.path.join(outputs_path, 'integrated_line.gpkg')
 QgsVectorFileWriter.writeAsVectorFormat(
     temp_centerline_segmented, output_vector_path, 'utf-8,', driverName='GPKG')
 
-
 # add to the interface
 iface.addVectorLayer(output_vector_path, '', 'ogr')
+
+# remove temporary intersection layer
+QgsProject.instance().layerTreeRoot().removeLayer(temp_centerline_segmented)
+
+# Give a success method
+message_text = 'Successfully calculated integrated segment widths'
+iface.messageBar().pushMessage("Success", message_text, level=Qgis.Success)
